@@ -1,0 +1,6 @@
+autoloaders:
+  SEOCheckup: %module%/src
+
+commands:
+   customCommands:
+       - SEOCheckup\Magento\Command\SEO\Check
