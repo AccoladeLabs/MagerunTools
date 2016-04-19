@@ -1,15 +1,20 @@
 {
-    "name": "daim2k5/magerun-addons",
+    "name": "accoladefi/accoladefi-seo-checkup",
     "type": "library",
-    "description": "Addon commands for N98 MageRun",
-    "keywords": ["magerun"],
-    "homepage": "https://github.com/daim2k5/magerun-addons",
+    "description": "Search engine optimization checks for Magerun CLI",
+    "keywords": ["magerun", "seo"],
+    "homepage": "https://github.com/AccoladeFi/SEO_Checkup",
     "license": "MIT",
     "authors": [
+		{
+			"name": "Andreas",
+			"email" : "andreas@accolade.fi",
+			"role": "Developer"
+		},
         {
-            "name": "Damian Luszczymak",
-            "email": "info@icyapp.com",
-            "homepage": "http://www.icyapp.com",
+            "name": "Billy Brawner",
+            "email": "billy@accolade.fi",
+            "homepage": "http://wbrawner.com",
             "role": "Developer"
         }
     ],
@@ -19,8 +24,7 @@
     },
     "autoload": {
         "psr-0": {
-            "FIREGENTO": "src/"
+            "SEO_Checkup": "src/"
         }
-    },
-    "minimum-stability": "dev"
+    }
 }
