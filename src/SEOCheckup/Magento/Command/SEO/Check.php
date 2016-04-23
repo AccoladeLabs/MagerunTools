@@ -25,6 +25,11 @@ class Check extends AbstractCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+		$this->detectMagento($output, true);
+		if (!$this->initMagento()) {
+			return;
+		}
+
 		$url = \Mage::app()->getStore()->getBaseUrl();
 		$url = str_replace('n98-magerun.phar/', '', $url);
 		if (substr($url,0,6)=='https;'){
