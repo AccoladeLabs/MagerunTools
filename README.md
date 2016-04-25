@@ -19,7 +19,7 @@ This is an extension for the [Netz98 Magerun CLI Tool](https://github.com/netz98
 
 Installation
 ------------
-From the n98-magerun/modules directory:
+From the n98-magerun/modules directory (see [Where can modules be placed?](https://github.com/netz98/n98-magerun/wiki/Modules#where-can-modules-be-placed)):
 
 ###With composer:
 
