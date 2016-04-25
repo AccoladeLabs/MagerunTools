@@ -15,7 +15,8 @@ class Check extends AbstractCommand
         parent::configure();
         $this
             ->setName('seo:check')
-            ->setDescription('Seo Checkup');
+            ->setDescription('Seo Checkup')
+			->addArgument('url', InputArgument::OPTIONAL, 'An optional URL to check');
     }
 
     /**
@@ -29,7 +30,7 @@ class Check extends AbstractCommand
 		if (!$this->initMagento()) {
 			return;
 		}
-
+		$output->writeln("First Argument: " . $input->getFirstArgument());
 		$url = \Mage::app()->getStore()->getBaseUrl();
 		$url = str_replace('n98-magerun.phar/', '', $url);
 		if (substr($url,0,6)=='https;'){
