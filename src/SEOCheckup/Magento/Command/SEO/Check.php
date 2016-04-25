@@ -31,8 +31,15 @@ class Check extends AbstractCommand
 		if (!$this->initMagento()) {
 			return;
 		}
-		$output->writeln("First Argument: " . $input->getFirstArgument());
-		$url = \Mage::app()->getStore()->getBaseUrl();
+
+		# If a URL was given, set it, otherwise get it from the settings and take note either way.
+		if ($input->getArgument('url')) {
+			$url = $input->getArgument('url');
+			$external = true;
+		} else {
+			$url = \Mage::app()->getStore()->getBaseUrl();
+			$external = false;
+		}
 		$url = str_replace('n98-magerun.phar/', '', $url);
 		if (substr($url,0,6)=='https;'){
 			$url = str_replace('https;', 'https:', $url);
