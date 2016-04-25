@@ -51,6 +51,36 @@ class Check extends AbstractCommand
 		if (preg_match("(https?:\/\/)", $url) === 0) {
 			$url = "http://" . $url;
 		}
+		# Grab the response headers for parsing
+		$ch = curl_init();
+		curl_setopt_array($ch, [
+			CURLOPT_URL => $url,
+			CURLOPT_HEADER => true,
+			CURLOPT_NOBODY => true,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_FOLLOWLOCATION => true,
+			CURLOPT_HTTPHEADER => ["Accept-Encoding: gzip, deflate"]
+		]);
+		$result = curl_exec($ch);
+		$retcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+		# Begin parsing the data from the header.
+		$data = explode("\n", $result);
+		$headers = [];
+		# Store the data in key => value pairs for easy access.
+		foreach ($data as $index => $info) {
+			if ($info == "") {
+				continue;
+			}
+			$info = explode(":", $info);
+			if (count($info) > 1) {
+				$index = trim($info[0]);
+				$info = trim($info[1]);
+			}
+			$headers[$index] = $info;
+		};
+		# Grab the body HTML once for parsing later
+		$body = file_get_contents($url);
 		# Add URL info to output and PDF file
 		$txt = "URL: " . $url;
 		$output->writeln($txt);
@@ -112,71 +142,126 @@ class Check extends AbstractCommand
 		$txt = $title.' of store: '.$value;
 		fwrite($pdflines, $txt."\n");
 		
-		
-        $title = "HTML Head Default Title";
-        $getvalue = \Mage::app()->getConfig('design/head/default_title');
-        if ('Magento Commerce' == $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
+		# Store settings should only be checked if it's an internal check, otherwise the title tags should be scanned
+		$title = "HTML Head Title";
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_title');
+			$output->writeln('Get Value: '.$getvalue);
+			if ('Magento Commerce' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<title\>(.*?)\<\/title\>/i", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
-
 		
-        $title = "HTML Head Default Description";
-        $getvalue = \Mage::app()->getConfig('design/head/default_description');
-        if ('Default Description' == $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
+        $title = "HTML Head Description";
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_description');
+			if ('Default Description' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<meta\sname\=\"description\"\scontent\=\"(.*?)\"/", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}        
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 		
 		
         $title = "HTML Head Default Keywords";
-        $getvalue = \Mage::app()->getConfig('design/head/default_keywords');
-        if ('Magento, Varien, E-commerce' == $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_keywords');
+			if ('Magento, Varien, E-commerce' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<meta\sname\=\"keywords\"\scontent\=\"(.*?)\"/", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 		
 		
-        $title = "HTML Head Default Robots";
-        $getvalue = \Mage::app()->getConfig('design/head/default_robots');
-        if ('INDEX,FOLLOW' != $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
+        $title = "HTML Head Robots";
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_robots');
+			if ('INDEX,FOLLOW' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<meta\sname\=\"robots\"\scontent\=\"(.*?)\"/", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 		
-		
-        $title = "HTML Head Demo Notice";
-        $getvalue = \Mage::app()->getConfig('design/head/demonotice');
-        if ($getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
+		if (!$external) {
+			$title = "HTML Head Demo Notice";
+			$getvalue = \Mage::getStoreConfig('design/head/demonotice');
+			if ($getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+			$output->writeln($title.': '.$value);
+			$txt = $title.' of store: '.$value;
+			fwrite($pdflines, $txt."\n");
+		}
 		
         $title = "Image ALT attributes";
-	    $html = file_get_contents($url);
-		preg_match_all('~(http.*\.)(jpe?g|png|[tg]iff?|svg)~i', $html, $images);
-		preg_match_all('/alt="([\s\S])/', $html, $imgalt);
+		preg_match_all('~(http.*\.)(jpe?g|png|[tg]iff?|svg)~i', $body, $images);
+		preg_match_all('/alt="([\s\S])/', $body, $imgalt);
 		$imgcount = sizeof($images[0]);
 		$imgaltcount = sizeof($imgalt[0]);
 		$percent = $imgaltcount/$imgcount;
@@ -193,9 +278,8 @@ class Check extends AbstractCommand
 		
 		
         $title = "Image(s) size";
-	    $html = file_get_contents($url);
 		$pattern = '/([^"]*)(.jpe?g|.png|.svg)/i';
-		$m = preg_match_all($pattern,$html,$matches);
+		$m = preg_match_all($pattern,$body,$matches);
 		$value = 0;
 		foreach($matches[0] as $element)
 		{
@@ -213,35 +297,34 @@ class Check extends AbstractCommand
 		$txt = $title.' of store: '.$value;
 		fwrite($pdflines, $txt."\n");
 		
-		
-        $title = "Merge CSS Files";
-		$rewrite = \Mage::app()->getConfig('dev/css/merge_css_files');
-        if (!$rewrite) {
-			$value = '0';
-        } else {
-			$value = '1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' for store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Merge JavaScript Files ";
-		$rewrite = \Mage::app()->getConfig('dev/js/merge_files');
-        if (!$rewrite) {
-			$value = '0';
-        } else {
-			$value = '1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' for store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
+		if (!$external) {
+			$title = "Merge CSS Files";
+			$rewrite = \Mage::getStoreConfig('dev/css/merge_css_files');
+			if (!$rewrite) {
+				$value = '0';
+			} else {
+				$value = '1';
+			}
+			$output->writeln($title.': '.$value);
+			$txt = $title.' for store: '.$value;
+			fwrite($pdflines, $txt."\n");
+			
+			
+			$title = "Merge JavaScript Files ";
+			$rewrite = \Mage::getStoreConfig('dev/js/merge_files');
+			if (!$rewrite) {
+				$value = '0';
+			} else {
+				$value = '1';
+			}
+			$output->writeln($title.': '.$value);
+			$txt = $title.' for store: '.$value;
+			fwrite($pdflines, $txt."\n");
+		}
 		
         $title = "Microdata";
-	    $html = file_get_contents($url);
 		$microdata = '<script type="application/ld+json">';
-        if (strpos($html, $microdata) !== false) {
+        if (strpos($body, $microdata) !== false) {
 			$value = 'OK';
         } else {
 			$value = 'missing';
@@ -252,9 +335,8 @@ class Check extends AbstractCommand
 		
 		
         $title = "CSS styles";
-		$html = file_get_contents($url);
 		$pattern = '~(//.*\.)(css)~i';
-		$m = preg_match_all($pattern,$html,$matches);
+		$m = preg_match_all($pattern,$body,$matches);
 		$value = sizeof($matches[0]);
 		$output->writeln($title.': '.$value);
 		$txt = $title.' of store: '.$value;
@@ -262,22 +344,15 @@ class Check extends AbstractCommand
 		
 		
         $title = "JavaScript files";
-		$html = file_get_contents($url);
 		$pattern = '~(//.*\.)(js)~i';
-		$m = preg_match_all($pattern,$html,$matches);
+		$m = preg_match_all($pattern,$body,$matches);
 		$value = sizeof($matches[0]);
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 		
 		
         $title = "Response";
-	    $ch = curl_init($url);
-		curl_setopt($ch, CURLOPT_NOBODY, true);
-		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-		curl_exec($ch);
-		$retcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		curl_close($ch);
         if (200==$retcode) {
 			$value='online';
         } else if (401==$retcode){
@@ -286,42 +361,75 @@ class Check extends AbstractCommand
 			$value='offline';
         }
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 
-		
-		
-		$title = "Using Web Server Rewrites";
-		$rewrite = \Mage::app()->getConfig('web/seo/use_rewrite');
-        if (!$rewrite) {
-			$value = '0';
-        } else {
-			$value = '1';
-        }
+		$title = "Gzip compression";
+		if (isset ($headers["Content-Encoding"])) {
+			if ($headers["Content-Encoding"] == "gzip") {
+				$value = "Ok";
+			} else {
+				$value = "ERROR - gzip compression not enabled";
+			}
+		} else {
+			$value = "ERROR - Content-Encoding header not set";
+		}
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 		
+		if (!$external) {
+			$title = "Using Web Server Rewrites";
+			$rewrite = \Mage::app()->getConfig('web/seo/use_rewrite');
+			if (!$rewrite) {
+				$value = '0';
+			} else {
+				$value = '1';
+			}
+			$output->writeln($title.': '.$value);
+			$txt = $title.' of store: '.$value;
+			fwrite($pdflines, $txt."\n");
+		}
 		
         $title = "Robots.txt";
-        if (!file_exists('robots.txt')) {
-			$value='0';
-        } else {
-			$value='1';
-        }
+		if (!$external) {
+			if (!file_exists('robots.txt')) {
+				$value='0';
+			} else {
+				$value='1';
+			}
+		} else {
+			if ($header = substr(get_headers($url)[0], 9, 3)) {
+				if ($header == "404") {
+					$value = "ERROR - robots.txt not found";
+				} else {
+					$value = "OK";
+				}
+			}
+		}        
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 		
-		
+				
         $title = "Sitemap.xml";
-        if (!file_exists('sitemap.xml')) {
-			$value='0';
-        } else {
-			$value='1';
-        }
+		if (!$external) {
+			if (!file_exists('sitemap.xml')) {
+				$value='0';
+			} else {
+				$value='1';
+			}
+		} else {
+			if ($header = substr(get_headers($url)[0], 9, 3)) {
+				if ($header == "404") {
+					$value = "ERROR - sitemap.xml not found";
+				} else {
+					$value = "OK";
+				}
+			}
+		}              
 		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
+		$txt = $title.': '.$value;
 		fwrite($pdflines, $txt."\n");
 
 		
@@ -329,7 +437,7 @@ class Check extends AbstractCommand
 		/* www.whoisxmlapi.com credentials */
 		$username = 'magetest';
 		$password = 'testB027';
-	    $html = file_get_contents('http://www.whoisxmlapi.com/whoisserver/WhoisService?domainName='.$url.'&username='.$username.'&password='.$password);
+	    $html = file_get_contents('http://www.whoisxmlapi.com/whoisserver/WhoisService?domainName='.urlencode($url).'&username='.$username.'&password='.$password);
 		$r = explode('<createdDate>', $html);
 		if (isset($r[1])){
 			$r = explode('</createdDate>', $r[1]);
