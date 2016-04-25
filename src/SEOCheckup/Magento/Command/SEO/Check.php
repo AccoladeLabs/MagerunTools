@@ -16,7 +16,8 @@ class Check extends AbstractCommand
         $this
             ->setName('seo:check')
             ->setDescription('Seo Checkup')
-			->addArgument('url', InputArgument::OPTIONAL, 'An optional URL to check');
+			->addArgument('url', InputArgument::OPTIONAL, 'An optional URL to check')
+			->setHelp("When run without a URL, the current Magento directory is checked. Otherwise, an external scan is run on the URL given.");
     }
 
     /**
