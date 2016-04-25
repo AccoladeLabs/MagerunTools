@@ -73,7 +73,7 @@ class Check extends AbstractCommand
 		
 		
 		$title = "Alexa rank";
-	    $html = file_get_contents('http://www.alexa.com/siteinfo/'.$url);
+	    $html = file_get_contents('http://www.alexa.com/siteinfo/'. urlencode($url));
 		$r = explode('/awis -->', $html);
 		if (isset($r[1])){
 			$r = explode('</strong>', $r[1]);
