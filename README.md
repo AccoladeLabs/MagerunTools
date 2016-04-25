@@ -23,7 +23,7 @@ From the n98-magerun/modules directory (see [Where can modules be placed?](https
 
 ###With composer:
 
-`composer install accoladefi-seo-checkup`
+`composer require accoladefi-seo-checkup`
 
 ###With git:
 
