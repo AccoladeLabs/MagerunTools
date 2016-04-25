@@ -47,6 +47,16 @@ class Check extends AbstractCommand
 		else if(substr($url,0,5)=='http;'){
 			$url = str_replace('http;', 'http:', $url);
 		}
+		# Add protocol to the beginning of the URL if it doesn't already include it 
+		if (preg_match("(https?:\/\/)", $url) === 0) {
+			$url = "http://" . $url;
+		}
+		# Add URL info to output and PDF file
+		$txt = "URL: " . $url;
+		$output->writeln($txt);
+		$pdflines = fopen("pdflines.txt", "a");
+		fwrite($pdflines, $txt."\n");
+		
 		$title = "Site HTML size";
 	    $html = file_get_contents($url);
 		$size = mb_strlen($html, 'UTF-8')/8000;
