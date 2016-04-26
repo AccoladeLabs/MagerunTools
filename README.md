@@ -52,7 +52,7 @@ All contributions are welcome! In order to streamline development, please fork t
 
 Roadmap
 ----------
-```seo:check```
+`seo:check`
 
 * Storeviews with hreflang
 * Gzip enabled
@@ -80,13 +80,13 @@ Roadmap
 
  
 ###Advertising Feed
-```ad:feed```
+`ad:feed`
 
 * Generate Google Feed
 
 ###SEO Crawl 
 
-```seo:crawl```
+`seo:crawl`
 
 * crawl pages from sitemap.xml 
 * give overall report, summary on screen and report in PDF
@@ -98,7 +98,7 @@ Roadmap
 * Analytics Scripts
 
 ###SEO Monitor
-```seo:monitor```
+`seo:monitor`
 
 * can be put to cron to alert about change like robotx.txt changes and alerts
 * Offline / Online checker
@@ -113,21 +113,22 @@ Roadmap
 * sitespeed
 
 ###Social stats checker
-```some:check```
+`some:check`
 
 ###Security Monitor
-```security:check```
+`security:check`
 
-```security:monitor```
+`security:monitor`
 
 * admin URL changed
 * downloader URL protected
 * file permissions correct
 
 ###Performance Check / Monitor
-```perf:check```
 
-```perf:monitor```
+`perf:check`
+
+`perf:monitor`
 
 * jMeter
 * [Google PageSpeed] (https://developers.google.com/speed/docs/insights/v2/reference/pagespeedapi/runpagespeed#parameters)
