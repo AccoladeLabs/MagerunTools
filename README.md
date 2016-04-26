@@ -1,6 +1,7 @@
 SEO Checkup
 =========
-## Release - Version 0.1
+
+### Release - Version 0.1
 
 This is an extension for the [Netz98 Magerun CLI Tool](https://github.com/netz98/n98-magerun). It allows you to check the search engine optimization for any site. The current stable build performs the following checks:
 
