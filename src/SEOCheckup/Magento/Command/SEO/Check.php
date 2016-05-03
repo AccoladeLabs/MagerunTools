@@ -54,6 +54,9 @@ class Check extends AbstractCommand
 		if (preg_match("(https?:\/\/)", $url) === 0) {
 			$url = "http://" . $url;
 		}
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Checking URL: {$url}");
+		}
 		# Grab the response headers for parsing
 		$ch = curl_init();
 		curl_setopt_array($ch, [
@@ -62,11 +65,27 @@ class Check extends AbstractCommand
 			CURLOPT_NOBODY => true,
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_FOLLOWLOCATION => true,
-			CURLOPT_HTTPHEADER => ["Accept-Encoding: gzip, deflate"]
+			CURLOPT_HTTPHEADER => ["Accept-Encoding: gzip, deflate"],
+			CURLOPT_SSL_VERIFYPEER => false
 		]);
 		$result = curl_exec($ch);
+		$error = "";
+		if ($result === false) {
+			$error = curl_error($ch);
+		}
 		$retcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		curl_close($ch);
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("URL scanned");
+		}
+		# Proceed only if there were no errors
+		if ($error != "") {
+			echo "ERROR - {$error}\n";
+			return false;
+		}
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Parsing headers");
+		}
 		# Begin parsing the data from the header.
 		$data = explode("\n", $result);
 		$headers = [];
@@ -82,13 +101,20 @@ class Check extends AbstractCommand
 			}
 			$headers[$index] = $info;
 		};
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Headers parsed.\nRequesting body");
+		}
 		# Grab the body HTML once for parsing later
 		$body = file_get_contents($url);
-
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Body retrieved");
+		}
 		# Store info in array for parsing later
 		$info = [];
 		$info["URL"] = $url;
-
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Checking size of HTML");
+		}
 		$size = mb_strlen($body, 'UTF-8')/8000;
 		$size = round($size, 2);
         if ($size != 0) {
@@ -96,7 +122,13 @@ class Check extends AbstractCommand
         } else {
 			$info["HTML size"] = 'not available';
         }
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Size calculated");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Requesting Alexa rank");
+		}
 		$html = file_get_contents('http://www.alexa.com/siteinfo/'. urlencode($url));
 		$r = explode('/awis -->', $html);
 		if (isset($r[1])){
@@ -106,23 +138,40 @@ class Check extends AbstractCommand
         if (strpos($value, '<span') !== false) {
 			$info["Alexa rank"] = '0';
         }
-		
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Alexa rank retrieved");
+		}
+
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning for Google Analytics scripts");
+		}
 		$ga = '//www.google-analytics.com/analytics.js'; //Check for Google Analytics script
         if (strpos($body, $ga) !== false) {
 			$info["Google Analytics"] = 'Google Analytics script found';
         } else {
 			$info["Google Analytics"] = 'Google Analytics script not found';
         }
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Google Analytics scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning for Frosmo scripts");
+		}
 		$frosmo = '//inpref.s3.amazonaws.com/frosmo.easy.js'; //Check for Frosmo script
         if (strpos($body, $frosmo) !== false) {
 			$info["Frosmo analytics"] = 'Frosmo analytics script found';
         } else {
 			$info["Frosmo analytics"] = 'Frosmo analytics script not found';
         }
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Frosmo scan complete");
+		}
 
 		# Store settings should only be checked if it's an internal check, otherwise the title tags should be scanned
-
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning title tags");
+		}
 		if (!$external) {
 			$getvalue = \Mage::getStoreConfig('design/head/default_title');
  			if ('Magento Commerce' == $getvalue || '' == $getvalue) {
@@ -144,7 +193,13 @@ class Check extends AbstractCommand
 			}
 		}
 		$info["HTML Head Title"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Title tags scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning description meta tags");
+		}
 		if (!$external) {
 			$getvalue = \Mage::getStoreConfig('design/head/default_description');
 			if ('Default Description' == $getvalue || '' == $getvalue) {
@@ -166,7 +221,13 @@ class Check extends AbstractCommand
 			}
 		}
 		$info["HTML Head Description"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Description meta tags scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning keywords meta tags");
+		}
 		if (!$external) {
 			$getvalue = \Mage::getStoreConfig('design/head/default_keywords');
 			if ('Magento, Varien, E-commerce' == $getvalue || '' == $getvalue) {
@@ -188,7 +249,13 @@ class Check extends AbstractCommand
 			}
 		}
 		$info["HTML Head Default Keywords"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Keywords meta tags scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning robots meta tags");
+		}
 		if (!$external) {
 			$getvalue = \Mage::getStoreConfig('design/head/default_robots');
 			if ('INDEX,FOLLOW' == $getvalue || '' == $getvalue) {
@@ -210,8 +277,14 @@ class Check extends AbstractCommand
 			}
 		}
 		$info["HTML Head Robots"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Robots meta tags scan complete");
+		}
 
 		if (!$external) {
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("Scanning demo notice settings");
+			}
 			$getvalue = \Mage::getStoreConfig('design/head/demonotice');
 			if ($getvalue) {
 				$value = 'ERROR - not changed';
@@ -219,8 +292,14 @@ class Check extends AbstractCommand
 				$value = 'OK';
 			}
 			$info["HTML Head Demo Notice"] = $value;
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("Demo notice scan complete");
+			}
 		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning image alt attributes");
+		}
 		preg_match_all('~(http.*\.)(jpe?g|png|[tg]iff?|svg)~i', $body, $images);
 		preg_match_all('/alt="([\s\S])/', $body, $imgalt);
 		$imgcount = sizeof($images[0]);
@@ -234,24 +313,39 @@ class Check extends AbstractCommand
 			$value = 'only '.$imgaltcount.'/'.$imgcount.' images have alt tags';
         }
 		$info["Image ALT attributes"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Image alt attributes scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning image sizes");
+		}
 		$pattern = '/([^"]*)(.jpe?g|.png|.svg)/i';
-		$m = preg_match_all($pattern,$body,$matches);
+		preg_match_all($pattern,$body,$matches);
 		$value = 0;
 		foreach($matches[0] as $element)
 		{
-			if (substr($element,0,2)=='//')
+			if (substr($element, 0, 2)=='//')
 				$element = 'http:'.$element;
 			try
 			{
 				$img = get_headers($element, 1);
 				$value += (int) $img["Content-Length"];
 			}
-			catch (SomeException $e){}
+			catch (SomeException $e){
+				echo "ERROR:";
+				print_r($e);
+			}
 		}
 		$info["Image(s) size"] = round(($value/8388608),2).'MB';
-		
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Image sizes scan complete");
+		}
+
 		if (!$external) {
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("Scanning CSS merge settings");
+			}
 			$rewrite = \Mage::getStoreConfig('dev/css/merge_css_files');
 			if (!$rewrite) {
 				$value = '0';
@@ -259,7 +353,13 @@ class Check extends AbstractCommand
 				$value = '1';
 			}
 			$info["Merge CSS Files"] = $value;
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("CSS merge settings scan complete");
+			}
 
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("Scanning JS merge settings");
+			}
 			$rewrite = \Mage::getStoreConfig('dev/js/merge_files');
 			if (!$rewrite) {
 				$value = '0';
@@ -267,8 +367,14 @@ class Check extends AbstractCommand
 				$value = '1';
 			}
 			$info["Merge JavaScript Files "] = $value;
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("JS merge settings scan complete");
+			}
 		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning microdata");
+		}
 		$microdata = '<script type="application/ld+json">';
         if (strpos($body, $microdata) !== false) {
 			$value = 'OK';
@@ -276,17 +382,41 @@ class Check extends AbstractCommand
 			$value = 'missing';
         }
 		$info["Microdata"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Microdata scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning number of CSS files");
+		}
 		$pattern = '~(//.*\.)(css)~i';
 		preg_match_all($pattern,$body,$matches);
 		$info["CSS styles"] = sizeof($matches[0]);
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("CSS files scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning number of JS files");
+		}
 		$pattern = '~(//.*\.)(js)~i';
 		preg_match_all($pattern,$body,$matches);
 		$info["JavaScript files"] = sizeof($matches[0]);
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("JS files scan complete");
+		}
 
-        $info["Response"] = $retcode;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning response code");
+		}
+		$info["Response"] = $retcode;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Response code scanned");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning content encoding");
+		}
 		if (isset ($headers["Content-Encoding"])) {
 			if ($headers["Content-Encoding"] == "gzip") {
 				$value = "Ok";
@@ -297,8 +427,14 @@ class Check extends AbstractCommand
 			$value = "ERROR - Content-Encoding header not set";
 		}
 		$info["Gzip compression"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Content encoding scanned");
+		}
 
 		if (!$external) {
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("Scanning web server rewrites");
+			}
 			$rewrite = \Mage::app()->getConfig('web/seo/use_rewrite');
 			if (!$rewrite) {
 				$value = '0';
@@ -306,8 +442,14 @@ class Check extends AbstractCommand
 				$value = '1';
 			}
 			$info["Using Web Server Rewrites"] = $value;
+			if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+				$output->writeln("Web server rewrites scanned");
+			}
 		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning for robots.txt");
+		}
 		if (!$external) {
 			if (!file_exists('robots.txt')) {
 				$value='0';
@@ -324,7 +466,13 @@ class Check extends AbstractCommand
 			}
 		}        
 		$info["Robots.txt"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Robots.txt scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Scanning for sitemap.xml");
+		}
 		if (!$external) {
 			if (!file_exists('sitemap.xml')) {
 				$value='0';
@@ -341,7 +489,13 @@ class Check extends AbstractCommand
 			}
 		}              
 		$info["Sitemap.xml"] = $value;
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Sitemap.xml scan complete");
+		}
 
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Requesting WHOIS data");
+		}
 		/* www.whoisxmlapi.com credentials */
 		$username = 'magetest';
 		$password = 'testB027';
@@ -377,7 +531,9 @@ class Check extends AbstractCommand
 			$value = $value.' days';
         }
 		$info["WHOIS Estimated domain age"] = $value;
-
+		if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+			$output->writeln("Sitemap.xml scan complete");
+		}
 
 		# Print out the data in a nice format:
 		$table = new Table($output);
