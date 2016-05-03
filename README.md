@@ -1,7 +1,6 @@
 SEO Checkup
 =========
-
-### Release - Version 0.1
+## Release - Version 0.1
 
 This is an extension for the [Netz98 Magerun CLI Tool](https://github.com/netz98/n98-magerun). It allows you to check the search engine optimization for any site. The current stable build performs the following checks:
 
@@ -19,6 +18,7 @@ This is an extension for the [Netz98 Magerun CLI Tool](https://github.com/netz98
 * ALT attributes
 * Page size XXXXX KB
 * Image(s) size XXXXX KB
+* Gzip enabled
 
 Installation
 ------------
@@ -30,7 +30,7 @@ From the n98-magerun/modules directory (see [Where can modules be placed?](https
 
 ###With git:
 
-`git clone https://github.com/Accolades/SEO_Checkup`
+`git clone https://github.com/AccoladeFi/SEO_Checkup`
 
 Commands
 ------------
@@ -52,10 +52,9 @@ All contributions are welcome! In order to streamline development, please fork t
 
 Roadmap
 ----------
-`seo:check`
+```seo:check```
 
 * Storeviews with hreflang
-* Gzip enabled
 * H1 Check - Not missing / Only one H1 on page (whats the value in there)
 * How many internal / external links on page
 * URLs work with HTTP or HTTPS, but not both.
@@ -80,13 +79,13 @@ Roadmap
 
  
 ###Advertising Feed
-`ad:feed`
+```ad:feed```
 
 * Generate Google Feed
 
 ###SEO Crawl 
 
-`seo:crawl`
+```seo:crawl```
 
 * crawl pages from sitemap.xml 
 * give overall report, summary on screen and report in PDF
@@ -98,7 +97,7 @@ Roadmap
 * Analytics Scripts
 
 ###SEO Monitor
-`seo:monitor`
+```seo:monitor```
 
 * can be put to cron to alert about change like robotx.txt changes and alerts
 * Offline / Online checker
@@ -113,22 +112,21 @@ Roadmap
 * sitespeed
 
 ###Social stats checker
-`some:check`
+```some:check```
 
 ###Security Monitor
-`security:check`
+```security:check```
 
-`security:monitor`
+```security:monitor```
 
 * admin URL changed
 * downloader URL protected
 * file permissions correct
 
 ###Performance Check / Monitor
+```perf:check```
 
-`perf:check`
-
-`perf:monitor`
+```perf:monitor```
 
 * jMeter
 * [Google PageSpeed] (https://developers.google.com/speed/docs/insights/v2/reference/pagespeedapi/runpagespeed#parameters)

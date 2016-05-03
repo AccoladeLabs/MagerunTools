@@ -2,6 +2,9 @@
 
 namespace SEOCheckup\Magento\Command\SEO;
 
+use Symfony\Component\Console\Helper\Table;
+use Symfony\Component\Console\Helper\TableSeparator;
+use Symfony\Component\Console\Helper\TableCell;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -15,7 +18,9 @@ class Check extends AbstractCommand
         parent::configure();
         $this
             ->setName('seo:check')
-            ->setDescription('Seo Checkup');
+            ->setDescription('Seo Checkup')
+			->addArgument('url', InputArgument::OPTIONAL, 'An optional URL to check')
+			->setHelp("When run without a URL, the current Magento directory is checked. Otherwise, an external scan is run on the URL given.");
     }
 
     /**
@@ -29,8 +34,14 @@ class Check extends AbstractCommand
 		if (!$this->initMagento()) {
 			return;
 		}
-
-		$url = \Mage::app()->getStore()->getBaseUrl();
+		# If a URL was given, set it, otherwise get it from the settings and take note either way.
+		if ($input->getArgument('url')) {
+			$url = $input->getArgument('url');
+			$external = true;
+		} else {
+			$url = \Mage::app()->getStore()->getBaseUrl();
+			$external = false;
+		}
 		$url = str_replace('n98-magerun.phar/', '', $url);
 		if (substr($url,0,6)=='https;'){
 			$url = str_replace('https;', 'https:', $url);
@@ -38,126 +49,178 @@ class Check extends AbstractCommand
 		else if(substr($url,0,5)=='http;'){
 			$url = str_replace('http;', 'http:', $url);
 		}
-		$title = "Site HTML size";
-	    $html = file_get_contents($url);
-		$size = mb_strlen($html, 'UTF-8')/8000;
+		# Add protocol to the beginning of the URL if it doesn't already include it 
+		if (preg_match("(https?:\/\/)", $url) === 0) {
+			$url = "http://" . $url;
+		}
+		# Grab the response headers for parsing
+		$ch = curl_init();
+		curl_setopt_array($ch, [
+			CURLOPT_URL => $url,
+			CURLOPT_HEADER => true,
+			CURLOPT_NOBODY => true,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_FOLLOWLOCATION => true,
+			CURLOPT_HTTPHEADER => ["Accept-Encoding: gzip, deflate"],
+			CURLOPT_SSL_VERIFYPEER => false
+		]);
+		$result = curl_exec($ch);
+		$error = "";
+		if ($result === false) {
+			$error = curl_error($ch);
+		}
+		$retcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+		# Proceed only if there were no errors
+		if ($error != "") {
+			echo "ERROR - {$error}\n";
+			return false;
+		}
+		# Begin parsing the data from the header.
+		$data = explode("\n", $result);
+		$headers = [];
+		# Store the data in key => value pairs for easy access.
+		foreach ($data as $index => $info) {
+			if ($info == "") {
+				continue;
+			}
+			$info = explode(":", $info);
+			if (count($info) > 1) {
+				$index = trim($info[0]);
+				$info = trim($info[1]);
+			}
+			$headers[$index] = $info;
+		};
+		# Grab the body HTML once for parsing later
+		$body = file_get_contents($url);
+		# Store info in array for parsing later
+		$info = [];
+		$info["URL"] = $url;
+		$size = mb_strlen($body, 'UTF-8')/8000;
 		$size = round($size, 2);
         if ($size != 0) {
-			$value = $size.' KB';
+			$info["HTML size"] = $size.' KB';
         } else {
-			$value = 'not available';
+			$info["HTML size"] = 'not available';
         }
-        $output->writeln($title.': '.$value); 
-		$pdflines = fopen("pdflines.txt", "a");
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-		$title = "Alexa rank";
-	    $html = file_get_contents('http://www.alexa.com/siteinfo/'.$url);
+		$html = file_get_contents('http://www.alexa.com/siteinfo/'. urlencode($url));
 		$r = explode('/awis -->', $html);
 		if (isset($r[1])){
 			$r = explode('</strong>', $r[1]);
-			$value = trim(preg_replace('/\s\s+/', ' ', $r[0]));
+			$info["Alexa rank"] = trim(preg_replace('/\s\s+/', ' ', $r[0]));
 		}
         if (strpos($value, '<span') !== false) {
-			$value = '0';
-        } else {
+			$info["Alexa rank"] = '0';
         }
-        $output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		
-		
-        $title = "Google Analytics";
-	    $html = file_get_contents($url);
 		$ga = '//www.google-analytics.com/analytics.js'; //Check for Google Analytics script
-        if (strpos($html, $ga) !== false) {
-			$value = 'Google Analytics script found';
+        if (strpos($body, $ga) !== false) {
+			$info["Google Analytics"] = 'Google Analytics script found';
         } else {
-			$value = 'Google Analytics script not found';
+			$info["Google Analytics"] = 'Google Analytics script not found';
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Frosmo analytics";
-	    $html = file_get_contents($url);
 		$frosmo = '//inpref.s3.amazonaws.com/frosmo.easy.js'; //Check for Frosmo script
-        if (strpos($html, $frosmo) !== false) {
-			$value = 'Frosmo analytics script found';
+        if (strpos($body, $frosmo) !== false) {
+			$info["Frosmo analytics"] = 'Frosmo analytics script found';
         } else {
-			$value = 'Frosmo analytics script not found';
+			$info["Frosmo analytics"] = 'Frosmo analytics script not found';
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "HTML Head Default Title";
-        $getvalue = \Mage::app()->getConfig('design/head/default_title');
-        if ('Magento Commerce' == $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
+		# Store settings should only be checked if it's an internal check, otherwise the title tags should be scanned
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_title');
+ 			if ('Magento Commerce' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<title\>(.*?)\<\/title\>/i", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
+		$info["HTML Head Title"] = $value;
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_description');
+			if ('Default Description' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<meta\sname\=\"description\"\scontent\=\"(.*?)\"/", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
+		$info["HTML Head Description"] = $value;
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_keywords');
+			if ('Magento, Varien, E-commerce' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<meta\sname\=\"keywords\"\scontent\=\"(.*?)\"/", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
+		$info["HTML Head Default Keywords"] = $value;
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/default_robots');
+			if ('INDEX,FOLLOW' == $getvalue || '' == $getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+		} else {
+			$matches = [];
+			preg_match("/\<meta\sname\=\"robots\"\scontent\=\"(.*?)\"/", $body, $matches);
+			if (isset($matches[1])) {
+				if ($matches[1] == '') {
+					$value = 'ERROR - not set';
+				} else {
+					$value = $matches[1];
+				}
+			} else {
+				$value = 'ERROR - not set';
+			}
+		}
+		$info["HTML Head Robots"] = $value;
+		if (!$external) {
+			$getvalue = \Mage::getStoreConfig('design/head/demonotice');
+			if ($getvalue) {
+				$value = 'ERROR - not changed';
+			} else {
+				$value = 'OK';
+			}
+			$info["HTML Head Demo Notice"] = $value;
+		}
 
-		
-        $title = "HTML Head Default Description";
-        $getvalue = \Mage::app()->getConfig('design/head/default_description');
-        if ('Default Description' == $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "HTML Head Default Keywords";
-        $getvalue = \Mage::app()->getConfig('design/head/default_keywords');
-        if ('Magento, Varien, E-commerce' == $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "HTML Head Default Robots";
-        $getvalue = \Mage::app()->getConfig('design/head/default_robots');
-        if ('INDEX,FOLLOW' != $getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "HTML Head Demo Notice";
-        $getvalue = \Mage::app()->getConfig('design/head/demonotice');
-        if ($getvalue) {
-            $value = 'ERROR - not changed';
-        } else {
-            $value = 'OK';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Image ALT attributes";
-	    $html = file_get_contents($url);
-		preg_match_all('~(http.*\.)(jpe?g|png|[tg]iff?|svg)~i', $html, $images);
-		preg_match_all('/alt="([\s\S])/', $html, $imgalt);
+		preg_match_all('~(http.*\.)(jpe?g|png|[tg]iff?|svg)~i', $body, $images);
+		preg_match_all('/alt="([\s\S])/', $body, $imgalt);
 		$imgcount = sizeof($images[0]);
 		$imgaltcount = sizeof($imgalt[0]);
 		$percent = $imgaltcount/$imgcount;
@@ -168,149 +231,113 @@ class Check extends AbstractCommand
 		} else {
 			$value = 'only '.$imgaltcount.'/'.$imgcount.' images have alt tags';
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Image(s) size";
-	    $html = file_get_contents($url);
+		$info["Image ALT attributes"] = $value;
 		$pattern = '/([^"]*)(.jpe?g|.png|.svg)/i';
-		$m = preg_match_all($pattern,$html,$matches);
+		preg_match_all($pattern,$body,$matches);
 		$value = 0;
 		foreach($matches[0] as $element)
 		{
-			if (substr($element,0,2)=='//')
+			if (substr($element, 0, 2)=='//')
 				$element = 'http:'.$element;
 			try
 			{
 				$img = get_headers($element, 1);
-				$value += $img["Content-Length"];
+				$value += (int) $img["Content-Length"];
 			}
-			catch (SomeException $e){}
+			catch (SomeException $e){
+				echo "ERROR:";
+				print_r($e);
+			}
 		}
-		$value = round(($value/8388608),2).'MB';
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Merge CSS Files";
-		$rewrite = \Mage::app()->getConfig('dev/css/merge_css_files');
-        if (!$rewrite) {
-			$value = '0';
-        } else {
-			$value = '1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' for store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Merge JavaScript Files ";
-		$rewrite = \Mage::app()->getConfig('dev/js/merge_files');
-        if (!$rewrite) {
-			$value = '0';
-        } else {
-			$value = '1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' for store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Microdata";
-	    $html = file_get_contents($url);
+		$info["Image(s) size"] = round(($value/8388608),2).'MB';
+
+		if (!$external) {
+			$rewrite = \Mage::getStoreConfig('dev/css/merge_css_files');
+			if (!$rewrite) {
+				$value = '0';
+			} else {
+				$value = '1';
+			}
+			$info["Merge CSS Files"] = $value;
+			$rewrite = \Mage::getStoreConfig('dev/js/merge_files');
+			if (!$rewrite) {
+				$value = '0';
+			} else {
+				$value = '1';
+			}
+			$info["Merge JavaScript Files "] = $value;
+		}
+
 		$microdata = '<script type="application/ld+json">';
-        if (strpos($html, $microdata) !== false) {
+        if (strpos($body, $microdata) !== false) {
 			$value = 'OK';
         } else {
 			$value = 'missing';
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "CSS styles";
-		$html = file_get_contents($url);
+		$info["Microdata"] = $value;
 		$pattern = '~(//.*\.)(css)~i';
-		$m = preg_match_all($pattern,$html,$matches);
-		$value = sizeof($matches[0]);
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "JavaScript files";
-		$html = file_get_contents($url);
+		preg_match_all($pattern,$body,$matches);
+		$info["CSS styles"] = sizeof($matches[0]);
 		$pattern = '~(//.*\.)(js)~i';
-		$m = preg_match_all($pattern,$html,$matches);
-		$value = sizeof($matches[0]);
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Response";
-	    $ch = curl_init($url);
-		curl_setopt($ch, CURLOPT_NOBODY, true);
-		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-		curl_exec($ch);
-		$retcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		curl_close($ch);
-        if (200==$retcode) {
-			$value='online';
-        } else if (401==$retcode){
-			$value='Error 401 - Unauthorized: Access is denied';
+		preg_match_all($pattern,$body,$matches);
+		$info["JavaScript files"] = sizeof($matches[0]);
+		$info["Response"] = $retcode;
+		if (isset ($headers["Content-Encoding"])) {
+			if ($headers["Content-Encoding"] == "gzip") {
+				$value = "Ok";
+			} else {
+				$value = "ERROR - gzip compression not enabled";
+			}
 		} else {
-			$value='offline';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
+			$value = "ERROR - Content-Encoding header not set";
+		}
+		$info["Gzip compression"] = $value;
+		if (!$external) {
+			$rewrite = \Mage::app()->getConfig('web/seo/use_rewrite');
+			if (!$rewrite) {
+				$value = '0';
+			} else {
+				$value = '1';
+			}
+			$info["Using Web Server Rewrites"] = $value;
+		}
 
-		
-		
-		$title = "Using Web Server Rewrites";
-		$rewrite = \Mage::app()->getConfig('web/seo/use_rewrite');
-        if (!$rewrite) {
-			$value = '0';
-        } else {
-			$value = '1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Robots.txt";
-        if (!file_exists('robots.txt')) {
-			$value='0';
-        } else {
-			$value='1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "Sitemap.xml";
-        if (!file_exists('sitemap.xml')) {
-			$value='0';
-        } else {
-			$value='1';
-        }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-
-		
-        $title = "WHOIS Created date";
+		if (!$external) {
+			if (!file_exists('robots.txt')) {
+				$value='0';
+			} else {
+				$value='1';
+			}
+		} else {
+			if ($header = substr(get_headers($url)[0], 9, 3)) {
+				if ($header == "404") {
+					$value = "ERROR - robots.txt not found";
+				} else {
+					$value = "OK";
+				}
+			}
+		}        
+		$info["Robots.txt"] = $value;
+		if (!$external) {
+			if (!file_exists('sitemap.xml')) {
+				$value='0';
+			} else {
+				$value='1';
+			}
+		} else {
+			if ($header = substr(get_headers($url)[0], 9, 3)) {
+				if ($header == "404") {
+					$value = "ERROR - sitemap.xml not found";
+				} else {
+					$value = "OK";
+				}
+			}
+		}              
+		$info["Sitemap.xml"] = $value;
 		/* www.whoisxmlapi.com credentials */
 		$username = 'magetest';
 		$password = 'testB027';
-	    $html = file_get_contents('http://www.whoisxmlapi.com/whoisserver/WhoisService?domainName='.$url.'&username='.$username.'&password='.$password);
+	    $html = file_get_contents('http://www.whoisxmlapi.com/whoisserver/WhoisService?domainName='.urlencode($url).'&username='.$username.'&password='.$password);
 		$r = explode('<createdDate>', $html);
 		if (isset($r[1])){
 			$r = explode('</createdDate>', $r[1]);
@@ -318,14 +345,9 @@ class Check extends AbstractCommand
 		}
         if (strlen($html)==131) {
 			$value = 'please insert valid whoisxmlapi.com credentials to Whois.php';
-        } else {
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "WHOIS Expire date";
+		$info["WHOIS Created date"] = $value;
+
 		$r = explode('<expiresDate>', $html);
 		if (isset($r[1])){
 			$r = explode('</expiresDate>', $r[1]);
@@ -333,31 +355,52 @@ class Check extends AbstractCommand
 		}
         if (strlen($html)==131) {
 			$value = 'please insert valid whoisxmlapi.com credentials to Whois.php';
-        } else {
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-        $title = "WHOIS Estimated domain age";
+		$info["WHOIS Expire date"] = $value;
+
 		$r = explode('<estimatedDomainAge>', $html);
 		if (isset($r[1])){
 			$r = explode('</estimatedDomainAge>', $r[1]);
 			$value = $r[0];
 		}
-		
         if (strlen($html)==131) {
 			$value = 'please insert valid whoisxmlapi.com credentials to Whois.php';
         } else {
 			$value = $value.' days';
         }
-		$output->writeln($title.': '.$value);
-		$txt = $title.' of store: '.$value;
-		fwrite($pdflines, $txt."\n");
-		
-		
-		fclose($pdflines);
-		include('pdf.php'); //Make PDF
+		$info["WHOIS Estimated domain age"] = $value;
+		# Print out the data in a nice format:
+		$table = new Table($output);
+		$table->setHeaders([
+			new TableCell(
+				"Accolade's SEO Checkup Report",
+				["colspan" => 2]
+			)
+		]);
+		foreach ($info as $title => $value) {
+			# Prevent the rows from being longer than 80 characters for nice viewing on all screen sizes
+			$rowSpan = 2;
+			if (strlen($value) > 42) {
+				$value = chunk_split($value, 42, "\n");
+				$rowSpan = substr_count($value, "\n") + 1;
+			}
+			$rows[] = [
+				$title,
+				new TableCell(
+					(string) $value,
+					["rowspan" => $rowSpan]
+				)
+			];
+		}
+		$table->setRows($rows);
+		$table->render();
+		if (true) {
+			$pdflines = fopen("pdflines.txt", "a");
+			foreach ($info as $title => $value) {
+				fwrite($pdflines, $title . ": " . (string) $value . "\n");
+			}
+			fclose($pdflines);
+			include('pdf.php'); //Make PDF
+		}
     }
 }
