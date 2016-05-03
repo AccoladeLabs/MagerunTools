@@ -30,7 +30,7 @@ From the n98-magerun/modules directory (see [Where can modules be placed?](https
 
 ###With git:
 
-`git clone https://github.com/AccoladeFi/SEO_Checkup`
+`git clone https://github.com/Accolades/SEO_Checkup.git`
 
 Commands
 ------------
