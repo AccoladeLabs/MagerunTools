@@ -1,4 +1,4 @@
-SEO Checkup
+Accolade Magerun Tools
 =========
 ## Release - Version 0.1
 
